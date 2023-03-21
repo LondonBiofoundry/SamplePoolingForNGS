@@ -8,6 +8,7 @@ import time
 import os
 import shutil
 import PySimpleGUI as sg
+import string
 
 # %%
 # Timestamp 
@@ -17,7 +18,7 @@ timestr = time.strftime("%Y%m%d-%H%M%S")
 
 # %%
 # Inputs
-input_file_folder = "/Users/keltoumboukra/Desktop/Coding projects - Git/SamplePoolingForNGS/Files/ClariostarOutputs/"
+input_file_folder = "/Users/keltoumboukra/Desktop/Coding projects - Git/SamplePoolingForNGS/Files/ClariostarOutputs/Archive/"
 input_file_name = "qubit_data_Marko_22112022.CSV"
 
 # final desired vol (nL)
@@ -42,8 +43,8 @@ BeckmanOrEcho = "Echo"
 sg.theme('LightBrown9')
     
 layout = [
-        [sg.Text('Choose automated platform to use:\n\t- Echo: non genomic DNA\n\t- Beckman: genomic DNA')],
-        [sg.Text('Desired platform name ("Echo" or "Beckman"):')],
+        [sg.Text('Choose automated platform to use:\n\t- Echo: non genomic DNA\n\t- Beckman: genomic DNA\n\t- Beckman PacBio: Pooling for PacBio on Beckman')],
+        [sg.Text('Desired platform name ("Echo" or "Beckman" or "Beckman PacBio"):')],
         [sg.InputText("Echo")],
         [sg.Submit(), sg.Cancel()]
         ]
@@ -75,7 +76,7 @@ if BeckmanOrEcho == "Echo":
         [sg.Submit(), sg.Cancel()]
     ]
 
-elif BeckmanOrEcho == "Beckman":
+elif BeckmanOrEcho == "Beckman" or "Beckman PacBio":
     layout = [
         [sg.Text('Please enter the desired parameters')],
         [sg.Text('Input file folder (ending with /)', size =(25, 1)), sg.InputText("/Users/keltoumboukra/Desktop/Coding projects - Git/SamplePoolingForNGS/Files/ClariostarOutputs/")],
@@ -86,7 +87,8 @@ elif BeckmanOrEcho == "Beckman":
         [sg.Text('Minimum pipetting capacity (uL)', size =(25, 1)), sg.InputText("0.5")],
         [sg.Text('Sample volume available (uL)', size =(25, 1)), sg.InputText("25")],
         [sg.Submit(), sg.Cancel()]
-    ]
+    ]     
+
 
 window = sg.Window('Robot File Generator For NGS Pooling', layout)
 event, values = window.read()
@@ -123,7 +125,10 @@ if BeckmanOrEcho == "Echo":
 elif BeckmanOrEcho == "Beckman":
     output_beckman_file_name = "BeckmanFile.csv"
     output_beckman_file_df = pd.DataFrame(columns=['Source Well','Destination Well','Transfer Volume'])    
-
+elif BeckmanOrEcho == "Beckman PacBio":
+    output_beckmanPacBio_file_name = "BeckmanPacBioFile.csv"
+    output_beckmanPacBio_file_df = pd.DataFrame(columns=['Source Well 384','Source Well 96','Source Plate 96','Destination Well','Transfer Volume']) 
+    
 output_report_name = "ExceptionsReport.csv"
 output_report_df = pd.DataFrame(columns=['Sample Well ID','Sample Concentration','Comment'])
 
@@ -188,6 +193,43 @@ for row in input_file_df.itertuples():
     output_file_df.at[Index,'Sample Calculated Weight Normalised']=sample_normalised_weight
 
 # %%
+# Translate 384 coordinates to 96 coordinates for Beckman PacBio
+
+def _translate(id):
+  id = id -1
+  if (id // 24) % 2 ==0:
+    if id % 2==0:
+        destinationrow = 1 + id % 24 //2
+        destinationCol = chr(ord('@')+1+id // 48)
+        return { "plate": 1, "well": destinationCol + str(destinationrow)}
+    else:
+        destinationrow = 1 + id % 24 //2
+        destinationCol = chr(ord('@')+1+id // 48)
+        return { "plate": 2, "well": destinationCol + str(destinationrow)}
+  else:
+    if id % 2==0:
+        destinationrow =  1 +id % 24 //2
+        destinationCol = chr(ord('@')+1+id // 48)
+        return { "plate": 3, "well": destinationCol + str(destinationrow)}
+    else:
+        destinationrow =  1 +id % 24 //2
+        destinationCol = chr(ord('@')+1+id // 48)
+        return { "plate": 4, "well": destinationCol + str(destinationrow)}
+
+# Generate dictionary to to convert 384 well number to 96-well plate number and well coordinate
+
+x = list(map(_translate, [i+1 for i in range(0,384)]))
+
+rows = [i for i in string.ascii_uppercase[:16]]
+columns = [i for i in range(1, 24 + 1)]
+wells = [letter + str(number) if number >= 10 else letter + "0" + str(number) for letter in rows for number in columns]
+
+
+d1=dict(zip(wells,x))
+
+
+
+# %%
 # Calculate Volume to pipette for each sample in the final pool
 
 vol_in_pool = float()
@@ -215,6 +257,8 @@ for row in input_file_df.itertuples():
             output_echo_file_df = output_echo_file_df.append({'Source Well': Well, 'Destination Well': pool_well_in_output_plate, 'Transfer Volume': vol_in_pool}, ignore_index=True)
         elif BeckmanOrEcho == "Beckman":
             output_beckman_file_df = output_beckman_file_df.append({'Source Well': Well, 'Destination Well': pool_well_in_output_plate, 'Transfer Volume': vol_in_pool}, ignore_index=True)
+        elif BeckmanOrEcho == "Beckman PacBio":
+            output_beckmanPacBio_file_df = output_beckmanPacBio_file_df.append({'Source Well 384': Well,'Source Well 96': d1[Well]["well"],'Source Plate 96' : d1[Well]["plate"],'Destination Well' : pool_well_in_output_plate,'Transfer Volume': vol_in_pool}, ignore_index=True)
 
 
 # %%
@@ -256,7 +300,17 @@ elif BeckmanOrEcho == "Beckman":
         output_beckman_file_df.to_csv(output_files_folder + "OutputFiles/" + output_beckman_file_name, index=False)
         layout = [[sg.Text("Processing successful! Final pool concentration: {} ng/uL.".format(final_pool_concentration))], [sg.Button("OK")]]
         window = sg.Window("Beckman File Generator For NGS Pooling", layout)
-    
+        
+elif BeckmanOrEcho == "Beckman PacBio":
+    if fail_bool == bool(1):
+        layout = [[sg.Text("Processing failed. The concentration of 1 sample or more is out of range and doesn't allow pooling with the settings entered. Check report file for details.")], [sg.Button("OK")]]
+        window = sg.Window("Beckman File Generator For NGS Pooling", layout)
+    else:
+        output_file_df.to_csv(output_files_folder + "OutputFiles/" + output_file_name, index=False)
+        output_beckmanPacBio_file_df = output_beckmanPacBio_file_df.sort_values(by='Transfer Volume', ascending=False)
+        output_beckmanPacBio_file_df.to_csv(output_files_folder + "OutputFiles/" + output_beckmanPacBio_file_name, index=False)
+        layout = [[sg.Text("Processing successful! Final pool concentration: {} ng/uL.".format(final_pool_concentration))], [sg.Button("OK")]]
+        window = sg.Window("Beckman PacBio File Generator For NGS Pooling", layout)
 
 output_report_df.to_csv(output_files_folder + "OutputFiles/" + output_report_name, index=False)
 
@@ -265,9 +319,6 @@ while True:
     if event == "OK" or event == sg.WIN_CLOSED:
         break
 window.close()
-
-
-# %%
 
 
 
