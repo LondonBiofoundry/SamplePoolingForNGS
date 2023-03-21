@@ -38,14 +38,12 @@ BeckmanOrEcho = "Echo"
 
 
 # %%
-# Ask user which platform to use: Beckman or Echo
-
 sg.theme('LightBrown9')
     
 layout = [
         [sg.Text('Choose automated platform to use:\n\t- Echo: non genomic DNA\n\t- Beckman: genomic DNA\n\t- Beckman PacBio: Pooling for PacBio on Beckman')],
-        [sg.Text('Desired platform name ("Echo" or "Beckman" or "Beckman PacBio"):')],
-        [sg.InputText("Echo")],
+        [sg.Text('Desired platform name:')],
+        [sg.DropDown(["Echo", "Beckman", "Beckman PacBio"], default_value="Echo")],
         [sg.Submit(), sg.Cancel()]
         ]
 
@@ -73,6 +71,7 @@ if BeckmanOrEcho == "Echo":
         [sg.Text('Pooling well position', size =(25, 1)), sg.InputText("B1")],
         [sg.Text('Minimum pipetting capacity (nL)', size =(25, 1)), sg.InputText("25")],
         [sg.Text('Sample volume available (nL)', size =(25, 1)), sg.InputText("5000")],
+        [sg.Text('Exclude samples with concentration lower than (ng/uL)', size =(25, 1)), sg.InputText("0.35")],
         [sg.Submit(), sg.Cancel()]
     ]
 
@@ -86,6 +85,7 @@ elif BeckmanOrEcho == "Beckman" or "Beckman PacBio":
         [sg.Text('Pooling well position', size =(25, 1)), sg.InputText("B1")],
         [sg.Text('Minimum pipetting capacity (uL)', size =(25, 1)), sg.InputText("0.5")],
         [sg.Text('Sample volume available (uL)', size =(25, 1)), sg.InputText("25")],
+        [sg.Text('Exclude conc (ng/uL) lower than', size =(25, 1)), sg.InputText("0.35")],
         [sg.Submit(), sg.Cancel()]
     ]     
 
@@ -103,6 +103,7 @@ final_pool_vol = float(values[3])
 pool_well_in_output_plate = values[4]
 min_pipetting_capacity = float(values[5])
 vol_available_in_well = float(values[6])
+min_threshold_values = float(values[7])
 
 # Dataframes
 input_file_df = pd.read_csv(input_file_folder + input_file_name)
@@ -151,7 +152,7 @@ for row in input_file_df.itertuples():
     Well = row[1]
     Concentration = row[3]
     
-    if Concentration <= 0:
+    if Concentration <= min_threshold_values:
         output_report_df = output_report_df.append({'Sample Well ID': Well, 'Sample Concentration': Concentration, 'Comment': "Sample has negative value for concentration"}, ignore_index=True)
         input_file_df = input_file_df.drop(Index)
 
@@ -226,6 +227,11 @@ wells = [letter + str(number) if number >= 10 else letter + "0" + str(number) fo
 
 
 d1=dict(zip(wells,x))
+d1
+
+#print(d1["G10"])
+#print(d1["G10"]["plate"])
+#print(d1["G10"]["well"])
 
 
 
@@ -319,6 +325,12 @@ while True:
     if event == "OK" or event == sg.WIN_CLOSED:
         break
 window.close()
+
+
+# %%
+
+
+# %%
 
 
 
