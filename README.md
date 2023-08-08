@@ -77,10 +77,7 @@ This protocol can be run either using the Echo 525 for non genomic DNA samples, 
 
 - [ ] Install project in Foundry's Beckman workcell
 - [ ] Improve Clariostar template with features like automated outlier removal
-- [ ] Reduce number of decimals in output files
 - [ ] Add option for user to remove list of wells
-- [ ] Make the workflow easily adaptable for different numbers of columns / samples
-- [ ] Write SOP (missing Echo one)
 - [ ] Test low dead volume plates to reduce amount required as input for Echo + Test low volume assay plate (test robotic arm or find high profile low volume plates)
 
 ## License
